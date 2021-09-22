@@ -9,9 +9,9 @@ if __name__ == "__main__":
     port = 8080
 
     # Read in stored RSA keys here
-    # with open('client_private.txt', 'rb'):
+    # with open('client_private.pem', 'rb'):
     #     pass
-    # with open('client_public.txt', 'rb'):
+    # with open('client_public.pem', 'rb'):
     #     pass
     # Otherwise generate new RSA keys here
 

@@ -38,9 +38,9 @@ if __name__ == "__main__":
     FLAG_QUIT = "quit"
 
     # Read in stored RSA keys here
-    # with open('server_private.txt', 'rb'):
+    # with open('server_private.pem', 'rb'):
     #     pass
-    # with open('server_public.txt', 'rb'):
+    # with open('server_public.pem', 'rb'):
     #     pass
     # Otherwise generate new RSA keys here
 
