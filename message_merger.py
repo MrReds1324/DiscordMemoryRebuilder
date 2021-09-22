@@ -1,9 +1,9 @@
-import csv
 import argparse
+import csv
+import json
 import os
 import sys
 from operator import itemgetter
-import json
 
 
 def sort_key(value):
