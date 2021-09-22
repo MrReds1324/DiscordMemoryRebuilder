@@ -109,6 +109,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.idea
 
 # Spyder project settings
 .spyderproject
@@ -127,3 +128,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# RSA key files that we do not want to commit ever
+client_private.pem
+client_public.pem
+server_private.pem
+server_public.pem
