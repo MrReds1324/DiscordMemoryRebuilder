@@ -6,10 +6,6 @@ import sys
 from operator import itemgetter
 
 
-def sort_key(value):
-    return int(value[0])
-
-
 def read_csv_file(file_path, unique_id):
     read_in_lines = []
     print(f'Reading csv file of {file_path}')
