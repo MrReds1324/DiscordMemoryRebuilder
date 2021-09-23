@@ -1,6 +1,7 @@
 from utils import build_data_frame, read_data_frames_into_messages
 
 
+# TODO: Update these when encryption has been added
 def test_build_data_frame():
     expected_frame = b'\x00\x00\x00\n0123456789'
     message = b'0123456789'
