@@ -37,7 +37,7 @@ def build_data_frame(encrypted_message: bytes) -> bytes:
     return length_in_bytes + encrypted_message
 
 
-def read_data_into_messages(raw_data: bytes, encryption_key: AES) -> List[str]:
+def read_data_frames_into_messages(raw_data: bytes, encryption_key: AES) -> List[str]:
     message_list = []
     # Transform our bytes into a byte stream which will allow us to much more easily read the data
     data_stream = BytesIO(raw_data)
@@ -59,8 +59,8 @@ def read_data_into_messages(raw_data: bytes, encryption_key: AES) -> List[str]:
 
 # TODO: fill out these utility functions for decrypting/encrypting data
 def encrypt_message(raw_message: bytes, encryption_key: AES) -> bytes:
-    pass
+    return raw_message
 
 
 def decrypt_message(encrypted_data: bytes, encryption_key: AES) -> bytes:
-    pass
+    return encrypted_data
