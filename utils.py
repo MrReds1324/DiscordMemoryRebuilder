@@ -37,6 +37,9 @@ class Connection:
     def receive(self, num_bytes: int) -> bytes:
         return self.socket.recv(num_bytes)
 
+    def close(self):
+        self.socket.close()
+
 
 BLOCK_SIZE = 16
 pad = lambda s: s + (BLOCK_SIZE - len(s) % BLOCK_SIZE) * chr(BLOCK_SIZE - len(s) % BLOCK_SIZE)
