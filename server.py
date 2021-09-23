@@ -1,7 +1,13 @@
 import socket
 import os
 import signal
+import struct
 import threading
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
+from utils import Connection, Signal
+
+server_8_bytes = get_random_bytes(8)
 
 
 def get_ip_address():
@@ -9,31 +15,39 @@ def get_ip_address():
     return '0.0.0.0'
 
 
-def send_message(socket_client):
+def handle_handshake(connection: Connection) -> bool:
+    return True
+
+
+def connection_setup():
     while True:
-        msg = input("\n[>] ENTER YOUR MESSAGE : ")
-        socket_client.send(bytes(msg))
-        if msg == FLAG_QUIT:
-            os.kill(os.getpid(), signal.SIGKILL)
+        try:
+            client_socket, address = server.accept()
 
+            print("[!] One client is trying to connect...")
+            client = Connection()
+            client.socket = client_socket
+            client.address = address
 
-def ConnectionSetup():
-    while True:
-        if check is True:
-            client, address = server.accept()
-            print("\n[!] One client is trying to connect...")
-            # get client public key and the hash of it
-            client_recieved = client.recv(2048)
-            print(f"RECEIVED DATA: {client_recieved}")
+            uid_length = struct.unpack('>Q', client.receive(8))[0]
+            recieved_uid = client.receive(uid_length)
+            client.uid = str(recieved_uid, 'utf-8')
 
-            msg = input("\n[>] ENTER YOUR MESSAGE : ")
-            client.send(bytes(msg, 'utf-8'))
-            if msg == FLAG_QUIT:
-                os.kill(os.getpid(), signal.SIGKILL)
+            if handle_handshake(client):
+                print(f'[!] Client with uid {client.uid} has connected and is now registered')
+                # Once we have completed the handshake, register the connection under the uid
+                OPEN_CONNECTIONS[client.uid] = client
+
+                received_signal = client.receive(7)
+                if received_signal == Signal.READY:
+                    print(f'[!] Client with uid {client.uid} is ready for data')
+
+        except ConnectionResetError:
+            print('[!] Client connection was forcibly reset')
 
 
 if __name__ == "__main__":
-    CONNECTION_LIST = []
+    OPEN_CONNECTIONS = {}
     FLAG_READY = "Ready"
     FLAG_QUIT = "quit"
 
@@ -47,15 +61,17 @@ if __name__ == "__main__":
     host = get_ip_address()
     port = 8080
 
-    print(f"\n[!] Server IP {host} & PORT {port}")
+    print(f"[!] Server IP {host} & PORT {port}")
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind((host, port))
     server.listen(1)
 
-    print("\n[!] Server Connection Successful")
+    print("[!] Server Connection Successful\n")
 
-    check = True
     # accept clients
-    threading_accept = threading.Thread(target=ConnectionSetup)
+    threading_accept = threading.Thread(target=connection_setup)
     threading_accept.start()
+
+    while True:
+        pass
