@@ -13,13 +13,36 @@ from io import BytesIO
 # hotkey('ctrl', 'v')
 # Leftover code so I dont forget this
 
+class Signal:
+    READY = b'~READY~'
+    AWAIT = b'~AWAIT~'
+    END = b'~END~'
+    TERMINATE = b'~TERMINATE~'
+
+
+# Light wrapper around a socket to give a bit more information about the connection and make managing easier
+class Connection:
+    def __init__(self, uid=None):
+        self.socket: socket = None
+        self.address: str = ''
+        self.port: int = -1
+        self.uid: str = uid
+        self.encryption_key: AES = None
+
+    def send(self, raw_data: bytes) -> int:
+        return self.socket.send(raw_data)
+
+    def receive(self, num_bytes: int) -> bytes:
+        return self.socket.recv(num_bytes)
+
+
 BLOCK_SIZE = 16
 pad = lambda s: s + (BLOCK_SIZE - len(s) % BLOCK_SIZE) * chr(BLOCK_SIZE - len(s) % BLOCK_SIZE)
 unpad = lambda s: s[:-ord(s[len(s) - 1:])]
 
 
 # Transmission Overview
-# All clients must connect, establish a handshake and send an AWAIT signal
+# All clients must connect, send their uid, establish a handshake and send an READY signal
 # The server will read lines until a new uid is encountered
 # The server will then encrypt each message portion, and pack it into a DataFrame
 # The server will send all DataFrames for the client to read and decrypt
