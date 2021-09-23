@@ -1,4 +1,9 @@
 import struct
+from typing import List
+from Crypto.Cipher import AES
+from io import BytesIO
+
+
 # from pyautogui import hotkey
 # import clipboard
 #
@@ -32,11 +37,30 @@ def build_data_frame(encrypted_message: bytes) -> bytes:
     return length_in_bytes + encrypted_message
 
 
+def read_data_into_messages(raw_data: bytes, encryption_key: AES) -> List[str]:
+    message_list = []
+    # Transform our bytes into a byte stream which will allow us to much more easily read the data
+    data_stream = BytesIO(raw_data)
+
+    while True:
+        message_length_bytes = data_stream.read(4)
+        if message_length_bytes == b'':  # Break when we read the end of the stream
+            break
+
+        message_length = struct.unpack('>I', message_length_bytes)[0]
+        encrypted_message_data = data_stream.read(message_length)
+        decrypted_message_data = decrypt_message(encrypted_message_data, encryption_key)
+
+        message = str(decrypted_message_data, 'utf-8')
+        message_list.append(message)
+
+    return message_list
+
+
 # TODO: fill out these utility functions for decrypting/encrypting data
-def encrypt_message():
+def encrypt_message(raw_message: bytes, encryption_key: AES) -> bytes:
     pass
 
 
-def decrypt_message():
+def decrypt_message(encrypted_data: bytes, encryption_key: AES) -> bytes:
     pass
-
