@@ -4,10 +4,9 @@ import signal
 import struct
 import threading
 from Crypto.Cipher import AES
+from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from utils import Connection, Signal
-
-server_8_bytes = get_random_bytes(8)
 
 
 def get_ip_address():
@@ -15,7 +14,7 @@ def get_ip_address():
     return '0.0.0.0'
 
 
-def handle_handshake(connection: Connection) -> bool:
+def handle_handshake(connection: Connection, s_8_bytes: bytes, rsa_public: RSA, rsa_private: RSA) -> bool:
     return True
 
 
@@ -33,7 +32,7 @@ def connection_setup():
             recieved_uid = client.receive(uid_length)
             client.uid = str(recieved_uid, 'utf-8')
 
-            if handle_handshake(client):
+            if handle_handshake(client, server_8_bytes, None, None):
                 print(f'[!] Client with uid {client.uid} has connected and is now registered')
                 # Once we have completed the handshake, register the connection under the uid
                 OPEN_CONNECTIONS[client.uid] = client
@@ -41,15 +40,18 @@ def connection_setup():
                 received_signal = client.receive(7)
                 if received_signal == Signal.READY:
                     print(f'[!] Client with uid {client.uid} is ready for data')
+                    while True:
+                        client.send(b'1')
+            else:
+                print(f'[!] Client with uid {client.uid} failed to properly exchange key information with the server')
+                client.close()
 
         except ConnectionResetError:
-            print('[!] Client connection was forcibly reset')
+            print('[!] Client connection was reset')
 
 
 if __name__ == "__main__":
     OPEN_CONNECTIONS = {}
-    FLAG_READY = "Ready"
-    FLAG_QUIT = "quit"
 
     # Read in stored RSA keys here
     # with open('server_private.pem', 'rb'):
@@ -57,6 +59,8 @@ if __name__ == "__main__":
     # with open('server_public.pem', 'rb'):
     #     pass
     # Otherwise generate new RSA keys here
+
+    server_8_bytes = get_random_bytes(8)
 
     host = get_ip_address()
     port = 8080
