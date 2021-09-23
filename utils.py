@@ -2,6 +2,8 @@ import struct
 from typing import List
 from Crypto.Cipher import AES
 from io import BytesIO
+from Crypto.PublicKey import RSA
+import socket
 
 
 # from pyautogui import hotkey

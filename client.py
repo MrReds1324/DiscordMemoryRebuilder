@@ -1,13 +1,37 @@
 import socket
+import struct
 import threading
 import hashlib
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
+from utils import Connection, Signal
+
+client_8_bytes = get_random_bytes(8)
+
+
+def connect_to_server(connection: Connection) -> bool:
+    attempts = 0
+    while attempts < 5:
+        try:
+            attempts += 1
+            connection.socket.connect((connection.address, connection.port))
+            print("[!] Connection Successful")
+            return True
+        except:
+            print(f"[!] Attempts remaining: {5 - attempts}")
+
+    return False
+
+
+def initiate_handshake(connection: Connection) -> bool:
+    pass
+
+
+def receive_data_frames() -> bytes:
+    pass
+
 
 if __name__ == "__main__":
-    FLAG_READY = "Ready"
-    FLAG_QUIT = "quit"
-    host = "127.0.0.1"
-    port = 8080
-
     # Read in stored RSA keys here
     # with open('client_private.pem', 'rb'):
     #     pass
@@ -15,22 +39,16 @@ if __name__ == "__main__":
     #     pass
     # Otherwise generate new RSA keys here
 
-    check = False
-    server = None
+    server = Connection('server')
+    server.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.address = "127.0.0.1"
+    server.port = 8080
 
-    try:
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.connect((host, port))
-        check = True
-    except:
-        print("[!] Check Server Address or Port\n")
-
-    if check and server:
-        print("\n[!] Connection Successful\n")
-        # Send Public RSA key here to initiate handshake
+    # When we have connected to the server, send the uid and initiate the handshake
+    if connect_to_server(server):
+        server.send(struct.pack('>Q', len(b'test')))
         server.send(b'test')
-        # Receive server RSA key here to continue handshake
-        server_received = server.recv(4072)
-        server.send(b'test again')
+        initiate_handshake(server)
+        server.send(Signal.READY)
 
-
+        server.receive(1024)
