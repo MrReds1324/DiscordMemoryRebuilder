@@ -9,8 +9,7 @@ from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from utils import Connection, Signal
-from pyautogui import hotkey, press
-import clipboard
+from pyautogui import write, press
 
 
 def connect_to_server(connection: Connection) -> bool:
@@ -28,15 +27,15 @@ def connect_to_server(connection: Connection) -> bool:
 
 
 def initiate_handshake(connection: Connection, c_8_bytes: bytes, rsa_public: RSA, rsa_private: RSA) -> bool:
-    pass
+    return True
 
 
 def receive_data_frames(connection: Connection) -> None:
+    print('Waiting for data frames')
     while True:
-        clipboard.copy('test')
         time.sleep(5)
 
-        hotkey('ctrl', 'v')
+        write('test')
         press('enter')
         server_signal = Signal.TERMINATE
         if server_signal == Signal.TERMINATE:
