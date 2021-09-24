@@ -8,7 +8,7 @@ import hashlib
 from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
-from utils import Connection, Signal
+from utils import Connection, Signal, decrypt_message, encrypt_data_to_data_frame
 from pyautogui import write, press
 
 
@@ -22,6 +22,7 @@ def connect_to_server(connection: Connection) -> bool:
             return True
         except:
             print(f"[!] Attempts remaining: {5 - attempts}")
+            time.sleep(1)
 
     return False
 
@@ -33,14 +34,30 @@ def initiate_handshake(connection: Connection, c_8_bytes: bytes, rsa_public: RSA
 def receive_data_frames(connection: Connection) -> None:
     print('Waiting for data frames')
     while True:
-        time.sleep(5)
+        try:
+            message_len_bytes = connection.receive(4)
+            message_len = struct.pack('>I', message_len_bytes)[0]
+            message_bytes = connection.receive(message_len)
 
-        write('test')
-        press('enter')
-        server_signal = Signal.TERMINATE
-        if server_signal == Signal.TERMINATE:
-            connection.close()
-            os._exit(0)  # Not sure if this is safe, but do not know any other way to exit the program
+            decrypted_message_bytes = decrypt_message(message_bytes, connection.encryption_key)
+
+            # If the decrypted message is the terminate signal, stop the client
+            if message_bytes == Signal.TERMINATE:
+                connection.close()  # Not sure if this is safe, but do not know any other way to exit the program
+                os._exit(0)
+
+            message = str(decrypted_message_bytes, 'utf-8')
+
+            # Write the message out to wherever the user is tabbed into
+            write(message)
+            press('enter')
+            time.sleep(1)
+
+            data_length, encrypted_message = encrypt_data_to_data_frame(Signal.AWAIT, connection.encryption_key)
+            connection.send(data_length)
+            connection.send(encrypted_message)
+        except:
+            print('[!] Something went wrong when receiving the data frame')
 
 
 if __name__ == "__main__":
