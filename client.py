@@ -3,6 +3,7 @@ import sys
 import time
 import socket
 import struct
+import random
 from threading import Thread
 import hashlib
 
@@ -61,7 +62,7 @@ def receive_data_frames(connection: Connection) -> None:
             # Write the message out to wherever the user is tabbed into
             write(message)
             press('enter')
-            time.sleep(1)
+            time.sleep(random.uniform(0, 1))
 
             data_length, encrypted_message = encrypt_data_to_data_frame(Signal.AWAIT, connection.encryption_key)
             connection.send(data_length)
