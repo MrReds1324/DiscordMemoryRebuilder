@@ -3,7 +3,7 @@ import sys
 import time
 import socket
 import struct
-import threading
+from threading import Thread
 import hashlib
 from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
@@ -98,7 +98,7 @@ if __name__ == "__main__":
             print('[!] Failed to properly exchange key information with the server')
             sys.exit(-1)
 
-        threading_receive_data = threading.Thread(target=receive_data_frames, args=[server])
+        threading_receive_data = Thread(target=receive_data_frames, args=[server])
         threading_receive_data.start()
 
     # This keeps the client program going while we wait for data frames to be sent
