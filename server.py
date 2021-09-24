@@ -21,7 +21,7 @@ def handle_handshake(connection: Connection, s_8_bytes: bytes, rsa_public: RSA, 
 def connection_setup():
     while True:
         try:
-            client_socket, address = server.accept()
+            client_socket, address = server.accept()  # This is a blocking call
 
             print("[!] One client is trying to connect...")
             client = Connection()
@@ -48,6 +48,13 @@ def connection_setup():
 
         except ConnectionResetError:
             print('[!] Client connection was reset')
+
+        except struct.error:
+            print('Failed to unpack uid')
+
+
+def send_data_frames():
+    pass
 
 
 if __name__ == "__main__":
