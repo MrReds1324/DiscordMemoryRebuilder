@@ -32,21 +32,22 @@ def initiate_handshake(connection: Connection, c_8_bytes: bytes, rsa_public: RSA
 
 
 def receive_data_frames(connection: Connection) -> None:
-    print('Waiting for data frames')
+    print('[!] Waiting for data frames')
     while True:
         try:
             message_len_bytes = connection.receive(4)
-            message_len = struct.pack('>I', message_len_bytes)[0]
+            message_len = struct.unpack('>I', message_len_bytes)[0]
             message_bytes = connection.receive(message_len)
 
             decrypted_message_bytes = decrypt_message(message_bytes, connection.encryption_key)
 
             # If the decrypted message is the terminate signal, stop the client
-            if message_bytes == Signal.TERMINATE:
+            if decrypted_message_bytes == Signal.TERMINATE:
                 connection.close()  # Not sure if this is safe, but do not know any other way to exit the program
                 os._exit(0)
 
             message = str(decrypted_message_bytes, 'utf-8')
+            print(message)
 
             # Write the message out to wherever the user is tabbed into
             write(message)
@@ -56,8 +57,9 @@ def receive_data_frames(connection: Connection) -> None:
             data_length, encrypted_message = encrypt_data_to_data_frame(Signal.AWAIT, connection.encryption_key)
             connection.send(data_length)
             connection.send(encrypted_message)
-        except:
-            print('[!] Something went wrong when receiving the data frame')
+        except Exception as e:
+            print(f'[!] Something went wrong when receiving the data frame: {e}')
+            time.sleep(1)
 
 
 if __name__ == "__main__":
@@ -84,7 +86,7 @@ if __name__ == "__main__":
         if initiate_handshake(server, client_8_bytes, None, None):
             server.send(Signal.READY)
         else:
-            print(f"[!] Failed to properly exchange key information with the server")
+            print('[!] Failed to properly exchange key information with the server')
             sys.exit(-1)
 
         threading_receive_data = threading.Thread(target=receive_data_frames, args=[server])
