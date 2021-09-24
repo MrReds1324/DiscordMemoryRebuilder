@@ -2,7 +2,7 @@ import socket
 import os
 import signal
 import struct
-import threading
+from threading import Thread, Lock
 import time
 
 from Crypto.Cipher import AES
@@ -11,6 +11,7 @@ from Crypto.Random import get_random_bytes
 from utils import Connection, Signal, encrypt_data_to_data_frame, decrypt_message
 
 MAX_RETRIES = 10
+
 
 def get_ip_address():
     # ip = requests.get('https://checkip.amazonaws.com').text.strip()
@@ -21,7 +22,7 @@ def handle_handshake(connection: Connection, s_8_bytes: bytes, rsa_public: RSA, 
     return True
 
 
-def connection_setup():
+def connection_setup(connection_lock: Lock):
     while True:
         try:
             client_socket, address = server.accept()  # This is a blocking call
@@ -38,7 +39,8 @@ def connection_setup():
             if handle_handshake(client, server_8_bytes, None, None):
                 print(f'[!] Client with uid {client.uid} has connected and is now registered')
                 # Once we have completed the handshake, register the connection under the uid
-                OPEN_CONNECTIONS[client.uid] = client
+                with connection_lock:
+                    OPEN_CONNECTIONS[client.uid] = client
 
                 received_signal = client.receive(7)
                 if received_signal == Signal.READY:
@@ -54,15 +56,17 @@ def connection_setup():
             print('[!] Failed to unpack uid size')
 
 
-def send_data_frame(connection: Connection, message: str, retry: int = 0) -> bool:
+def send_data_frame(connection: Connection, message: str, connection_lock: Lock, retry: int = 0) -> bool:
     if MAX_RETRIES == retry:
         return False
 
     try:
+        # Encrypt the message and send it to the server
         message_length, encrypted_message = encrypt_data_to_data_frame(bytes(message, 'utf-8'), connection.encryption_key)
         connection.send(message_length)
         connection.send(encrypted_message)
 
+        # Listen for the AWAIT, or RESEND signal before continuing
         message_len_bytes = connection.receive(4)
         message_len = struct.unpack('>I', message_len_bytes)[0]
         message_bytes = connection.receive(message_len)
@@ -73,15 +77,20 @@ def send_data_frame(connection: Connection, message: str, retry: int = 0) -> boo
         if decrypted_message_bytes == Signal.AWAIT:
             return True
         elif decrypted_message_bytes == Signal.RESEND:
-            return send_data_frame(connection, message, retry + 1)
+            return send_data_frame(connection, message, connection_lock, retry + 1)
 
     except ConnectionResetError:
         print('[!] Failed to send message to client because client connection was reset')
-        # Remove the client from the OPEN_CONNECTIONS here
+        # Remove the client from the OPEN_CONNECTIONS here if it fails to connect
+        with connection_lock:
+            connection.close()
+            del OPEN_CONNECTIONS[connection.uid]
         return False
 
 
 if __name__ == "__main__":
+    # Accessing/Modifying the OPEN_CONNECTIONS dictionary is not thread_safe so will need to lock access/modifications
+    _lock = Lock()
     OPEN_CONNECTIONS = {}
 
     # Read in stored RSA keys here
@@ -105,7 +114,7 @@ if __name__ == "__main__":
     print("[!] Server Connection Successful\n")
 
     # accept clients
-    threading_accept = threading.Thread(target=connection_setup)
+    threading_accept = Thread(target=connection_setup, args=[_lock])
     threading_accept.start()
 
     time.sleep(5)
@@ -115,7 +124,7 @@ if __name__ == "__main__":
     # We actually do not need to send anything using threading as each client must go before the other so we can just single thread this portion
     # and handle if a client disconnects
     for conn in OPEN_CONNECTIONS.values():
-        send_data_frame(conn, 'testing')
+        send_data_frame(conn, 'testing', _lock)
 
     while True:
         pass
