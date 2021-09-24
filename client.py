@@ -32,7 +32,14 @@ def initiate_handshake(connection: Connection, c_8_bytes: bytes, rsa_public: RSA
 
 
 def receive_data_frames(connection: Connection) -> None:
-    print('[!] Waiting for data frames')
+    # Start a short delay before receiving data to allow for tabbing into a server/channel
+    time_to_start = 10
+    for i in range(2):
+        print(f'[!] Starting receiving data frames in {time_to_start} seconds')
+        time.sleep(5)
+        time_to_start -= 5
+
+    print('[!] Receiving data frames')
     while True:
         try:
             message_len_bytes = connection.receive(4)
@@ -59,7 +66,9 @@ def receive_data_frames(connection: Connection) -> None:
             connection.send(encrypted_message)
         except Exception as e:
             print(f'[!] Something went wrong when receiving the data frame: {e}')
-            time.sleep(1)
+            data_length, encrypted_message = encrypt_data_to_data_frame(Signal.RESEND, connection.encryption_key)
+            connection.send(data_length)
+            connection.send(encrypted_message)
 
 
 if __name__ == "__main__":
