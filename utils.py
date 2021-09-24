@@ -19,6 +19,7 @@ class Signal:
     READY = b'~READY~'
     AWAIT = b'~AWAIT~'
     TERMINATE = b'~TERMINATE~'
+    RESEND = b'~RESEND~'
 
 
 # Light wrapper around a socket to give a bit more information about the connection and make managing easier
@@ -30,14 +31,17 @@ class Connection:
         self.uid: str = uid
         self.encryption_key: AES = None
 
-    def send(self, raw_data: bytes) -> int:
-        return self.socket.send(raw_data)
+    def send(self, raw_data: bytes, flags: int = 0) -> int:
+        return self.socket.send(raw_data, flags)
 
-    def receive(self, num_bytes: int) -> bytes:
-        return self.socket.recv(num_bytes)
+    def receive(self, num_bytes: int, flags: int = 0) -> bytes:
+        return self.socket.recv(num_bytes, flags)
 
     def close(self):
         self.socket.close()
+
+    def sendall(self, raw_data: bytes, flags: int = 0):
+        self.socket.sendall(raw_data, flags)
 
 
 BLOCK_SIZE = 16
@@ -65,6 +69,11 @@ def build_data_frame(encrypted_message: bytes) -> Tuple[bytes, bytes]:
 def decrypt_data_to_message(raw_data: bytes, encryption_key: AES) -> str:
     decrypted_message_data = decrypt_message(raw_data, encryption_key)
     return str(decrypted_message_data, 'utf-8')
+
+
+def encrypt_data_to_data_frame(raw_data: bytes, encryption_key: AES) -> Tuple[bytes, bytes]:
+    encrypted_message = encrypt_message(raw_data, encryption_key)
+    return build_data_frame(encrypted_message)
 
 
 # TODO: fill out these utility functions for decrypting/encrypting data
