@@ -133,14 +133,6 @@ if __name__ == "__main__":
     # Accessing/Modifying the OPEN_CONNECTIONS dictionary is not thread_safe so will need to lock access/modifications
     _lock = Lock()
     OPEN_CONNECTIONS = {}
-
-    # Read in stored RSA keys here
-    # with open('server_private.pem', 'rb'):
-    #     pass
-    # with open('server_public.pem', 'rb'):
-    #     pass
-    # Otherwise generate new RSA keys here
-
     server_8_bytes = get_random_bytes(8)
 
     host = get_ip_address()

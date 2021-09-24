@@ -94,12 +94,6 @@ if __name__ == "__main__":
     # parser.add_argument('-ip', '--ip-address', type=str, required=True, help='The IP of the server to connect to')
 
     args = parser.parse_args()
-    # Read in stored RSA keys here
-    # with open('client_private.pem', 'rb'):
-    #     pass
-    # with open('client_public.pem', 'rb'):
-    #     pass
-    # Otherwise generate new RSA keys here
 
     client_8_bytes = get_random_bytes(8)
 
