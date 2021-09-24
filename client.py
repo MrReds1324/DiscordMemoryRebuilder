@@ -5,6 +5,8 @@ import socket
 import struct
 from threading import Thread
 import hashlib
+
+import argparse
 from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
@@ -54,7 +56,7 @@ def receive_data_frames(connection: Connection) -> None:
                 os._exit(0)
 
             message = str(decrypted_message_bytes, 'utf-8')
-            print(message)
+            print(f'[~] RECEIVED MESSAGE [~] {message}')
 
             # Write the message out to wherever the user is tabbed into
             write(message)
@@ -86,6 +88,11 @@ def receive_data_frames(connection: Connection) -> None:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Pass in a uid to register yourself to the server with, and receive those messages')
+    parser.add_argument('-uid', '--unique-id', type=str, required=True, help='The unique id to register to the server with, and receive the messages of')
+    # parser.add_argument('-ip', '--ip-address', type=str, required=True, help='The IP of the server to connect to')
+
+    args = parser.parse_args()
     # Read in stored RSA keys here
     # with open('client_private.pem', 'rb'):
     #     pass
@@ -95,7 +102,7 @@ if __name__ == "__main__":
 
     client_8_bytes = get_random_bytes(8)
 
-    server = Connection('test')
+    server = Connection(args.unique_id)
     server.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.address = "127.0.0.1"
     server.port = 8080
@@ -117,7 +124,3 @@ if __name__ == "__main__":
         threading_receive_data = Thread(target=receive_data_frames, args=[server])
         threading_receive_data.start()
 
-    # This keeps the client program going while we wait for data frames to be sent
-    # and allows us to keyboard interrupt it if necessary
-    while True:
-        pass
