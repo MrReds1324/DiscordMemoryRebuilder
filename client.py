@@ -12,16 +12,16 @@ from utils import Connection, Signal, decrypt_message, encrypt_data_to_data_fram
 from pyautogui import write, press
 
 
-def connect_to_server(connection: Connection) -> bool:
+def connect_to_server(connection: Connection, max_attempts: int = 5) -> bool:
     attempts = 0
-    while attempts < 5:
+    while attempts < max_attempts:
         try:
             attempts += 1
             connection.socket.connect((connection.address, connection.port))
             print("[!] Connection Successful")
             return True
         except:
-            print(f"[!] Attempts remaining: {5 - attempts}")
+            print(f"[!] Attempts remaining: {max_attempts - attempts}")
             time.sleep(1)
 
     return False
@@ -64,6 +64,20 @@ def receive_data_frames(connection: Connection) -> None:
             data_length, encrypted_message = encrypt_data_to_data_frame(Signal.AWAIT, connection.encryption_key)
             connection.send(data_length)
             connection.send(encrypted_message)
+        except ConnectionResetError:  # Handle connection reset, and attempt to reestablish connection to the server
+            if connect_to_server(connection, 500):
+                # Manually send the information for the uid over
+                uid_bytes = bytes(connection.uid, 'utf-8')
+                connection.send(struct.pack('>Q', len(uid_bytes)))
+                connection.send(uid_bytes)
+
+                if initiate_handshake(connection, client_8_bytes, None, None):
+                    connection.send(Signal.READY)
+                else:
+                    print('[!] Failed to properly exchange key information with the server')
+                    connection.close()
+                    os._exit(-1) # Not sure if this is safe, but do not know any other way to exit the program
+
         except Exception as e:
             print(f'[!] Something went wrong when receiving the data frame: {e}')
             data_length, encrypted_message = encrypt_data_to_data_frame(Signal.RESEND, connection.encryption_key)
@@ -81,7 +95,7 @@ if __name__ == "__main__":
 
     client_8_bytes = get_random_bytes(8)
 
-    server = Connection('server')
+    server = Connection('test')
     server.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.address = "127.0.0.1"
     server.port = 8080
@@ -89,13 +103,15 @@ if __name__ == "__main__":
     # When we have connected to the server, send the uid and initiate the handshake
     if connect_to_server(server):
         # Manually send the information for the uid over
-        server.send(struct.pack('>Q', len(b'test')))
-        server.send(b'test')
+        uid_bytes = bytes(server.uid, 'utf-8')
+        server.send(struct.pack('>Q', len(uid_bytes)))
+        server.send(uid_bytes)
 
         if initiate_handshake(server, client_8_bytes, None, None):
             server.send(Signal.READY)
         else:
             print('[!] Failed to properly exchange key information with the server')
+            server.close()
             sys.exit(-1)
 
         threading_receive_data = Thread(target=receive_data_frames, args=[server])
