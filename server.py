@@ -3,11 +3,14 @@ import os
 import signal
 import struct
 import threading
+import time
+
 from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
-from utils import Connection, Signal
+from utils import Connection, Signal, encrypt_data_to_data_frame, decrypt_message
 
+MAX_RETRIES = 10
 
 def get_ip_address():
     # ip = requests.get('https://checkip.amazonaws.com').text.strip()
@@ -40,8 +43,6 @@ def connection_setup():
                 received_signal = client.receive(7)
                 if received_signal == Signal.READY:
                     print(f'[!] Client with uid {client.uid} is ready for data')
-                    while True:
-                        client.send(b'1')
             else:
                 print(f'[!] Client with uid {client.uid} failed to properly exchange key information with the server')
                 client.close()
@@ -50,11 +51,34 @@ def connection_setup():
             print('[!] Client connection was reset')
 
         except struct.error:
-            print('Failed to unpack uid')
+            print('[!] Failed to unpack uid size')
 
 
-def send_data_frames():
-    pass
+def send_data_frame(connection: Connection, message: str, retry: int = 0) -> bool:
+    if MAX_RETRIES == retry:
+        return False
+
+    try:
+        message_length, encrypted_message = encrypt_data_to_data_frame(bytes(message, 'utf-8'), connection.encryption_key)
+        connection.send(message_length)
+        connection.send(encrypted_message)
+
+        message_len_bytes = connection.receive(4)
+        message_len = struct.unpack('>I', message_len_bytes)[0]
+        message_bytes = connection.receive(message_len)
+
+        decrypted_message_bytes = decrypt_message(message_bytes, connection.encryption_key)
+
+        # If the decrypted message is the AWAIT signal return True, otherwise attempt to resend the message 10 times
+        if decrypted_message_bytes == Signal.AWAIT:
+            return True
+        elif decrypted_message_bytes == Signal.RESEND:
+            return send_data_frame(connection, message, retry + 1)
+
+    except ConnectionResetError:
+        print('[!] Failed to send message to client because client connection was reset')
+        # Remove the client from the OPEN_CONNECTIONS here
+        return False
 
 
 if __name__ == "__main__":
@@ -83,6 +107,15 @@ if __name__ == "__main__":
     # accept clients
     threading_accept = threading.Thread(target=connection_setup)
     threading_accept.start()
+
+    time.sleep(5)
+    while len(OPEN_CONNECTIONS.values()) == 0:
+        pass
+
+    # We actually do not need to send anything using threading as each client must go before the other so we can just single thread this portion
+    # and handle if a client disconnects
+    for conn in OPEN_CONNECTIONS.values():
+        send_data_frame(conn, 'testing')
 
     while True:
         pass
