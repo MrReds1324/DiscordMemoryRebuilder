@@ -38,8 +38,8 @@ def write_json_file(file_path, data):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Load a directory of message files and combine them into a single file containing messages, message file name'
                                                  'must be in the format of "messages_<UID>", as this will determine who gets what messages')
-    parser.add_argument('-i', '--input', type=str, help='Full path to the input directory containing the set of message files')
-    parser.add_argument('-o', '--output', type=str, help='Full path to the input directory containing the set of message files')
+    parser.add_argument('-i', '--input', type=str, required=True, help='Full path to the input directory containing the set of message files')
+    parser.add_argument('-o', '--output', type=str, required=True, help='Full path to the input directory containing the set of message files')
 
     args = parser.parse_args()
 
