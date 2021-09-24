@@ -71,6 +71,10 @@ def connection_setup(client_list: List[str], connection_lock: Lock):
 
 def send_data_frame(connection: Connection, message: str, connection_lock: Lock, retry: int = 0, wait_for_reply: bool = True) -> bool:
     if MAX_RETRIES == retry:
+        # Remove the client from the OPEN_CONNECTIONS here if we have failed to properly send the data and force it to reconnect
+        with connection_lock:
+            connection.close()
+            del OPEN_CONNECTIONS[connection.uid]
         return False
 
     try:
@@ -154,9 +158,9 @@ if __name__ == "__main__":
     threading_accept = Thread(target=connection_setup, args=[c_list, _lock])
     threading_accept.start()
 
-    time.sleep(5)
-    while len(OPEN_CONNECTIONS.values()) == 0:
-        pass
+    # Wait for all clients to connect to the server
+    while len(OPEN_CONNECTIONS.values()) < len(c_list):
+        time.sleep(1)
 
     # We actually do not need to send anything using threading as each client must go before the other so we can just single thread this portion
     # and handle if a client disconnects
@@ -168,8 +172,17 @@ if __name__ == "__main__":
             else:
                 expected_uid = row[4]
                 built_message = f'{row[2] + " " if row[2] else ""}{row[3]}'
+                print(f'[~] SENDING MESSAGE TO {expected_uid} [~] {built_message}')
                 conn = OPEN_CONNECTIONS.get(row[4])
-                send_data_frame(conn, built_message, _lock)
+
+                # Keep trying to send the message until max attempts reached, this gives us a max try of 100 per message
+                # Should not be hit, but you never know - Will most likely need a way to save session info in case a full rebuild cannot be completed
+                attempts = 0
+                while not send_data_frame(conn, built_message, _lock) and attempts < MAX_RETRIES:
+                    attempts += 1
+                    # Wait to try an reestablish a connection with all the clients
+                    while len(OPEN_CONNECTIONS.values()) < len(c_list):
+                        time.sleep(1)
 
     print('[!] Server successfully sent all messages, shutting down\n')
 
