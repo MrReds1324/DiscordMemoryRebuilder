@@ -196,11 +196,9 @@ if __name__ == "__main__":
         time.sleep(1)
 
     last_message_id = '0'
-    try:
+    if os.path.exists("last_message.txt"):
         with open('last_message.txt', encoding='utf-8') as last_message:
             last_message_id = last_message.read()
-    except:
-        pass
 
     print(f'[!] Fast forwarding to the message {last_message_id}')
 
