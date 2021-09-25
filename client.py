@@ -94,7 +94,7 @@ def receive_data_frames(connection: Connection) -> None:
             print(f'[~] RECEIVED MESSAGE [~] {message}')
 
             # Write the message out to wherever the user is tabbed into
-            write(message)
+            write(message.strip())
             press('enter')
             time.sleep(random.uniform(0, 1))
 
