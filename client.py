@@ -23,44 +23,48 @@ def connect_to_server(connection: Connection, max_attempts: int = 5) -> bool:
             connection.socket.connect((connection.address, connection.port))
             print("[!] Connection Successful")
             return True
-        except:
-            print(f"[!] Attempts remaining: {max_attempts - attempts}")
+        except Exception as e:
+            print(f"[!] Attempts remaining: {max_attempts - attempts} {e}")
             time.sleep(1)
 
     return False
 
 
 def initiate_handshake(connection: Connection, c_8_bytes: bytes, rsa_public: RSA, rsa_private: RSA) -> bool:
-    client_sha1 = SHA1.new(rsa_public).digest()
-    length, message = build_data_frame(rsa_public + client_sha1)
-    connection.send(length)
-    connection.send(message)
-    print("[!] Sending RSA and SHA1 to server...")
+    try:
+        client_sha1 = SHA1.new(rsa_public).digest()
+        length, message = build_data_frame(rsa_public + client_sha1)
+        connection.send(length)
+        connection.send(message)
+        print("[!] Sending RSA and SHA1 to server...")
 
-    length = int.from_bytes(connection.receive(4), byteorder='big')
-    received_bytes = connection.receive(length)
-    server_key = received_bytes[:-20]
-    server_sha1 = received_bytes[-20:]
+        length = struct.unpack('>I', connection.receive(4))[0]
+        received_bytes = connection.receive(length)
+        server_key = received_bytes[:-20]
+        server_sha1 = received_bytes[-20:]
 
-    length = int.from_bytes(connection.receive(4), byteorder='big')
-    encrypted_bytes = connection.receive(length)
+        length = struct.unpack('>I', connection.receive(4))[0]
+        # length = int.from_bytes(connection.receive(4), byteorder='big')
+        encrypted_bytes = connection.receive(length)
 
-    if client_sha1 != server_sha1:
+        if client_sha1 != server_sha1:
+            return False
+
+        private_rsa_key = RSA.importKey(rsa_private)
+        cipher_rsa = PKCS1_OAEP.new(private_rsa_key)
+        s_8_bytes = cipher_rsa.decrypt(encrypted_bytes)
+
+        server_rsa = RSA.importKey(server_key)
+        cipher_rsa = PKCS1_OAEP.new(server_rsa)
+        encrypted = cipher_rsa.encrypt(c_8_bytes)
+
+        connection.send(struct.pack('>I', len(encrypted)))
+        connection.send(encrypted)
+
+        connection.encryption_key = AES.new(s_8_bytes + c_8_bytes, AES.MODE_CBC, c_8_bytes + s_8_bytes)
+        return True
+    except ConnectionResetError:
         return False
-
-    private_rsa_key = RSA.importKey(rsa_private)
-    cipher_rsa = PKCS1_OAEP.new(private_rsa_key)
-    s_8_bytes = cipher_rsa.decrypt(encrypted_bytes)
-
-    server_rsa = RSA.importKey(server_key)
-    cipher_rsa = PKCS1_OAEP.new(server_rsa)
-    encrypted = cipher_rsa.encrypt(c_8_bytes)
-
-    connection.send(struct.pack('>I', len(encrypted)))
-    connection.send(encrypted)
-
-    connection.encryption_key = AES.new(s_8_bytes + c_8_bytes, AES.MODE_CBC, c_8_bytes + s_8_bytes)
-    return True
 
 
 def receive_data_frames(connection: Connection) -> None:
@@ -97,7 +101,10 @@ def receive_data_frames(connection: Connection) -> None:
             connection.send(data_length)
             connection.send(encrypted_message)
         except ConnectionResetError:  # Handle connection reset, and attempt to reestablish connection to the server
+            connection.close()
+            server.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             if connect_to_server(connection, 500):
+
                 # Manually send the information for the uid over
                 uid_bytes = bytes(connection.uid, 'utf-8')
                 connection.send(struct.pack('>Q', len(uid_bytes)))
@@ -124,7 +131,7 @@ if __name__ == "__main__":
     public_key = key.publickey().export_key()
 
     parser = argparse.ArgumentParser(description='Pass in a uid to register yourself to the server with, and receive those messages')
-    #parser.add_argument('-uid', '--unique-id', type=str, required=True, help='The unique id to register to the server with, and receive the messages of')
+    parser.add_argument('-uid', '--unique-id', type=str, required=True, help='The unique id to register to the server with, and receive the messages of')
     # parser.add_argument('-ip', '--ip-address', type=str, required=True, help='The IP of the server to connect to')
 
     args = parser.parse_args()
@@ -132,7 +139,7 @@ if __name__ == "__main__":
     client_8_bytes = get_random_bytes(8)
     print(f"[!] Client bytes before handshake: {client_8_bytes}")
 
-    server = Connection("args.unique_id")
+    server = Connection(args.unique_id)
     server.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.address = "127.0.0.1"
     server.port = 8080

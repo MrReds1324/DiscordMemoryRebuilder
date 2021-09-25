@@ -5,16 +5,6 @@ from io import BytesIO
 from Crypto.PublicKey import RSA
 import socket
 
-
-# from pyautogui import hotkey
-# import clipboard
-#
-# clipboard.copy('test')
-#
-# spam = clipboard.paste()
-# hotkey('ctrl', 'v')
-# Leftover code so I dont forget this
-
 class Signal:
     READY = b'~READY~'
     AWAIT = b'~AWAIT~'

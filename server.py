@@ -23,36 +23,39 @@ def get_ip_address():
 
 
 def handle_handshake(connection: Connection, s_8_bytes: bytes, rsa_public: RSA, rsa_private: RSA) -> bool:
-    length = int.from_bytes(connection.receive(4), byteorder='big')
-    received_bytes = connection.receive(length)
-    client_key = received_bytes[:-20]
-    client_sha1 = received_bytes[-20:]
+    try:
+        length = struct.unpack('>I', connection.receive(4))[0]
+        received_bytes = connection.receive(length)
+        client_key = received_bytes[:-20]
+        client_sha1 = received_bytes[-20:]
 
-    server_sha1 = SHA1.new(client_key).digest()
+        server_sha1 = SHA1.new(client_key).digest()
 
-    if client_sha1 != server_sha1:
+        if client_sha1 != server_sha1:
+            return False
+
+        client_rsa = RSA.importKey(client_key)
+        cipher_rsa = PKCS1_OAEP.new(client_rsa)
+        encrypted = cipher_rsa.encrypt(s_8_bytes)
+
+        length, message = build_data_frame(rsa_public + server_sha1)
+        connection.send(length)
+        connection.send(message)
+
+        length, message = build_data_frame(encrypted)
+        connection.send(length)
+        connection.send(message)
+
+        length = struct.unpack('>I', connection.receive(4))[0]
+        encrypted = connection.receive(length)
+        private_rsa_key = RSA.importKey(rsa_private)
+        cipher_rsa = PKCS1_OAEP.new(private_rsa_key)
+        c_8_bytes = cipher_rsa.decrypt(encrypted)
+
+        connection.encryption_key = AES.new(s_8_bytes + c_8_bytes, AES.MODE_CBC, c_8_bytes + s_8_bytes)
+        return True
+    except ConnectionResetError:
         return False
-
-    client_rsa = RSA.importKey(client_key)
-    cipher_rsa = PKCS1_OAEP.new(client_rsa)
-    encrypted = cipher_rsa.encrypt(s_8_bytes)
-
-    length, message = build_data_frame(rsa_public + server_sha1)
-    connection.send(length)
-    connection.send(message)
-
-    length, message = build_data_frame(encrypted)
-    connection.send(length)
-    connection.send(message)
-
-    length = int.from_bytes(connection.receive(4), byteorder='big')
-    encrypted = connection.receive(length)
-    private_rsa_key = RSA.importKey(rsa_private)
-    cipher_rsa = PKCS1_OAEP.new(private_rsa_key)
-    c_8_bytes = cipher_rsa.decrypt(encrypted)
-
-    connection.encryption_key = AES.new(s_8_bytes + c_8_bytes, AES.MODE_CBC, c_8_bytes + s_8_bytes)
-    return True
 
 
 def connection_setup(client_list: List[str], connection_lock: Lock):
@@ -67,13 +70,14 @@ def connection_setup(client_list: List[str], connection_lock: Lock):
 
             uid_length = struct.unpack('>Q', client.receive(8))[0]
             recieved_uid = client.receive(uid_length)
+            print(recieved_uid)
             client.uid = str(recieved_uid, 'utf-8')
 
             # If the client uid is not valid then close the connection
-            # if client.uid not in client_list:
-            #     print('[!] Client did not connect with a valid uid. Ending connection...')
-            #     client.close()
-            #     continue
+            if client.uid not in client_list:
+                print('[!] Client did not connect with a valid uid. Ending connection...')
+                client.close()
+                continue
 
             if handle_handshake(client, server_8_bytes, public_key, private_key):
                 print(f'[!] Client with uid {client.uid} has connected and is now registered')
@@ -138,8 +142,8 @@ def send_data_frame(connection: Connection, message: str, connection_lock: Lock,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Load a file full of message to be sent to each client, keyed by their uid, and a '
                                                  'server config which gives which client uids need to connect')
-    #parser.add_argument('-m', '--messages', type=str, required=True, help='Full path to the all_message.csv file containing the set of messages to be sent')
-    #parser.add_argument('-c', '--config', type=str, required=True, help='Full path to the input config for the server client uids')
+    parser.add_argument('-m', '--messages', type=str, required=True, help='Full path to the all_message.csv file containing the set of messages to be sent')
+    parser.add_argument('-c', '--config', type=str, required=True, help='Full path to the input config for the server client uids')
 
     args = parser.parse_args()
 
@@ -150,19 +154,19 @@ if __name__ == "__main__":
     private_key = key.export_key()
     public_key = key.publickey().export_key()
 
-    # if not os.path.isfile(args.messages):
-    #     print(f'[!] {args.messages} is not a file')
-    #     sys.exit(-1)
-    #
-    # if not os.path.isfile(args.config):
-    #     print(f'[!] {args.config} is not a file')
-    #     sys.exit(-1)
-    # else:
-    #     # Read in the config of the clients that will be connecting
-    #     with open(args.config, 'r', encoding='utf-8') as config_file:
-    #         json_obj = json.load(config_file)
-    #         if json_obj:
-    #             c_list = json_obj['clients']
+    if not os.path.isfile(args.messages):
+        print(f'[!] {args.messages} is not a file')
+        sys.exit(-1)
+
+    if not os.path.isfile(args.config):
+        print(f'[!] {args.config} is not a file')
+        sys.exit(-1)
+    else:
+        # Read in the config of the clients that will be connecting
+        with open(args.config, 'r', encoding='utf-8') as config_file:
+            json_obj = json.load(config_file)
+            if json_obj:
+                c_list = json_obj['clients']
 
     # Accessing/Modifying the OPEN_CONNECTIONS dictionary is not thread_safe so will need to lock access/modifications
     _lock = Lock()
@@ -185,37 +189,37 @@ if __name__ == "__main__":
     threading_accept.start()
 
     # Wait for all clients to connect to the server
-    # while len(OPEN_CONNECTIONS.values()) < len(c_list):
-    #     time.sleep(1)
-    #
-    # # We actually do not need to send anything using threading as each client must go before the other so we can just single thread this portion
-    # # and handle if a client disconnects
-    # with open(args.messages, encoding='utf-8') as messages_file:
-    #     csv_reader = csv.reader(messages_file, delimiter=',')
-    #     for row in csv_reader:
-    #         if row == ['ID', 'Timestamp', 'Contents', 'Attachments', 'UID']:
-    #             pass
-    #         else:
-    #             expected_uid = row[4]
-    #             built_message = f'{row[2] + " " if row[2] else ""}{row[3]}'
-    #             print(f'[~] SENDING MESSAGE TO {expected_uid} [~] {built_message}')
-    #             conn = OPEN_CONNECTIONS.get(row[4])
-    #
-    #             # Keep trying to send the message until max attempts reached, this gives us a max try of 100 per message
-    #             # Should not be hit, but you never know - Will most likely need a way to save session info in case a full rebuild cannot be completed
-    #             attempts = 0
-    #             while not send_data_frame(conn, built_message, _lock) and attempts < MAX_RETRIES:
-    #                 attempts += 1
-    #                 # Wait to try an reestablish a connection with all the clients
-    #                 while len(OPEN_CONNECTIONS.values()) < len(c_list):
-    #                     time.sleep(1)
-    #
-    # print('[!] Server successfully sent all messages, shutting down\n')
-    #
-    # for conn in OPEN_CONNECTIONS.values():
-    #     print(f'[!] Terminating connection {conn.uid}')
-    #     send_data_frame(conn, str(Signal.TERMINATE, 'utf-8'), _lock, wait_for_reply=False)
+    while len(OPEN_CONNECTIONS.values()) < len(c_list):
+        time.sleep(1)
+
+    # We actually do not need to send anything using threading as each client must go before the other so we can just single thread this portion
+    # and handle if a client disconnects
+    with open(args.messages, encoding='utf-8') as messages_file:
+        csv_reader = csv.reader(messages_file, delimiter=',')
+        for row in csv_reader:
+            if row == ['ID', 'Timestamp', 'Contents', 'Attachments', 'UID']:
+                pass
+            else:
+                expected_uid = row[4]
+                built_message = f'{row[2] + " " if row[2] else ""}{row[3]}'
+                print(f'[~] SENDING MESSAGE TO {expected_uid} [~] {built_message}')
+                conn = OPEN_CONNECTIONS.get(row[4])
+
+                # Keep trying to send the message until max attempts reached, this gives us a max try of 100 per message
+                # Should not be hit, but you never know - Will most likely need a way to save session info in case a full rebuild cannot be completed
+                attempts = 0
+                while not send_data_frame(conn, built_message, _lock) and attempts < MAX_RETRIES:
+                    attempts += 1
+                    # Wait to try an reestablish a connection with all the clients
+                    while len(OPEN_CONNECTIONS.values()) < len(c_list):
+                        time.sleep(1)
+
+    print('[!] Server successfully sent all messages, shutting down\n')
+
+    for conn in OPEN_CONNECTIONS.values():
+        print(f'[!] Terminating connection {conn.uid}')
+        send_data_frame(conn, str(Signal.TERMINATE, 'utf-8'), _lock, wait_for_reply=False)
 
     # Forces the server to shutdown, it will cause an exception
-    # server.close()
-    # sys.exit(0)
+    server.close()
+    sys.exit(0)
