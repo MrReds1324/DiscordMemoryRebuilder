@@ -32,11 +32,13 @@ def connect_to_server(connection: Connection, max_attempts: int = 5) -> bool:
 
 def initiate_handshake(connection: Connection, c_8_bytes: bytes, rsa_public: RSA, rsa_private: RSA) -> bool:
     sha_hash = SHA1.new(rsa_public).digest()
+    # TODO: Remove the b':' portion, we instead know the last 20 bytes will be the hash
     length, message = build_data_frame(rsa_public + b':' + sha_hash)
     connection.send(length)
     connection.send(message)
     print("[!] Sending RSA and SHA1 to server...")
 
+    # TODO: instead of receiving all the information from the server at once, instead receive the server public key + hash, then the enc server bytes
     length = struct.unpack('>I', connection.receive(4))[0]
     received_bytes = connection.receive(length)
     print(len(received_bytes.split(b':')))
@@ -54,6 +56,7 @@ def initiate_handshake(connection: Connection, c_8_bytes: bytes, rsa_public: RSA
     cipher_rsa = PKCS1_OAEP.new(server_rsa)
     encrypted = cipher_rsa.encrypt(c_8_bytes)
 
+    # TODO: instead of sending just the bytes, send the length then bytes like we do for other messages
     print(f"[!] Client sending encrypted data: {encrypted}")
 
     connection.send(encrypted)
@@ -124,11 +127,13 @@ if __name__ == "__main__":
     # Otherwise generate new RSA keys here
     key = RSA.generate(2048)
     private_key = key.export_key()
+    # TODO: Remove this, we dont need to save these keys
     file_out = open("client_private.pem", "wb")
     file_out.write(private_key)
     file_out.close()
 
     public_key = key.publickey().export_key()
+    # TODO: Remove this, we dont need to save these keys
     file_out = open("client_public.pem", "wb")
     file_out.write(public_key)
     file_out.close()

@@ -25,6 +25,7 @@ def get_ip_address():
 def handle_handshake(connection: Connection, s_8_bytes: bytes, rsa_public: RSA, rsa_private: RSA) -> bool:
     length = struct.unpack('>I', connection.receive(4))[0]
     received_bytes = connection.receive(length)
+    # TODO: Remove the b':' portion, we instead know the last 20 bytes will be the hash
     client_key, client_sha1 = received_bytes.split(b':')
 
     server_sha1 = SHA1.new(client_key).digest()
@@ -36,10 +37,12 @@ def handle_handshake(connection: Connection, s_8_bytes: bytes, rsa_public: RSA, 
     cipher_rsa = PKCS1_OAEP.new(client_rsa)
     encrypted = cipher_rsa.encrypt(s_8_bytes)
 
+    # TODO: Send two different messages, one with RSA, and one with encrypted data
     length, message = build_data_frame(rsa_public + b':' + server_sha1 + b':' + encrypted)
     connection.send(length)
     connection.send(message)
 
+    # TODO: Not sure this is always 8 bytes, send a length then the client encrypted bytes like we do for other messages
     encrypted = connection.receive(8)
     cipher_rsa = PKCS1_OAEP.new(rsa_private)
     c_8_bytes = cipher_rsa.decrypt(encrypted)
@@ -66,13 +69,17 @@ def connection_setup(client_list: List[str], connection_lock: Lock):
             client.uid = str(recieved_uid, 'utf-8')
 
             # generate new RSA keys
+            # TODO: Move this key generation to when the server first starts instead of each time a client tries to connect
+            # We can access this from the main scope, or at least pass two keys into this function
             key = RSA.generate(2048)
             private_key = key.export_key()
+            # TODO: Remove this, we dont need to save these keys
             file_out = open("server_private.pem", "wb")
             file_out.write(private_key)
             file_out.close()
 
             public_key = key.publickey().export_key()
+            # TODO: Remove this, we dont need to save these keys
             file_out = open("server_public.pem", "wb")
             file_out.write(public_key)
             file_out.close()
