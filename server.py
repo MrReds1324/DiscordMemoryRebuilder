@@ -73,7 +73,6 @@ def connection_setup(client_list: List[str], connection_lock: Lock):
 
             uid_length = struct.unpack('>Q', client.receive(8))[0]
             recieved_uid = client.receive(uid_length)
-            print(recieved_uid)
             client.uid = str(recieved_uid, 'utf-8')
 
             # If the client uid is not valid then close the connection
