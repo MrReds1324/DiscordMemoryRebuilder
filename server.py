@@ -21,7 +21,8 @@ MAX_RETRIES = 10
 
 
 def get_ip_address():
-    print(requests.get('https://checkip.amazonaws.com').text.strip())
+    ip = requests.get('https://checkip.amazonaws.com').text.strip()
+    print(ip)
     return '0.0.0.0'
 
 
@@ -194,6 +195,15 @@ if __name__ == "__main__":
     while len(OPEN_CONNECTIONS.values()) < len(c_list):
         time.sleep(1)
 
+    last_message_id = '0'
+    try:
+        with open('last_message.txt', encoding='utf-8') as last_message:
+            last_message_id = last_message.read()
+    except:
+        pass
+
+    print(f'[!] Fast forwarding to the message {last_message_id}')
+
     # We actually do not need to send anything using threading as each client must go before the other so we can just single thread this portion
     # and handle if a client disconnects
     with open(args.messages, encoding='utf-8') as messages_file:
@@ -201,9 +211,13 @@ if __name__ == "__main__":
         for row in csv_reader:
             if row == ['ID', 'Timestamp', 'Contents', 'Attachments', 'UID']:
                 pass
+            elif int(row[0]) < int(last_message_id):
+                continue
             else:
                 expected_uid = row[4]
                 built_message = f'{row[2] + " " if row[2] else ""}{row[3]}'
+                with open('last_message.txt', 'w', encoding='utf-8') as persist:
+                    persist.write(row[0])
                 print(f'[~] {row[0]} SENDING MESSAGE TO {expected_uid} [~] {built_message}')
                 conn = OPEN_CONNECTIONS.get(row[4])
 
@@ -221,6 +235,9 @@ if __name__ == "__main__":
     for conn in OPEN_CONNECTIONS.values():
         print(f'[!] Terminating connection {conn.uid}')
         send_data_frame(conn, str(Signal.TERMINATE, 'utf-8'), _lock, wait_for_reply=False)
+
+    if os.path.exists("last_message.txt"):
+        os.remove("last_message.txt")
 
     # Forces the server to shutdown, it will cause an exception
     server.close()
