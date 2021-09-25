@@ -133,7 +133,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Pass in a uid to register yourself to the server with, and receive those messages')
     parser.add_argument('-uid', '--unique-id', type=str, required=True, help='The unique id to register to the server with, and receive the messages of')
-    # parser.add_argument('-ip', '--ip-address', type=str, required=True, help='The IP of the server to connect to')
+    parser.add_argument('-ip', '--ip-address', type=str, required=True, help='The IP of the server to connect to')
 
     args = parser.parse_args()
 
@@ -141,7 +141,7 @@ if __name__ == "__main__":
 
     server = Connection(args.unique_id)
     server.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.address = "127.0.0.1"
+    server.address = args.ip_address
     server.port = 8080
 
     # When we have connected to the server, send the uid and initiate the handshake

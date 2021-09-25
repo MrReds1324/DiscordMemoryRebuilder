@@ -9,6 +9,7 @@ import time
 from threading import Thread, Lock
 from typing import List
 
+import requests
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Hash import SHA1
 from Crypto.PublicKey import RSA
@@ -20,7 +21,7 @@ MAX_RETRIES = 10
 
 
 def get_ip_address():
-    # ip = requests.get('https://checkip.amazonaws.com').text.strip()
+    print(requests.get('https://checkip.amazonaws.com').text.strip())
     return '0.0.0.0'
 
 
@@ -204,7 +205,7 @@ if __name__ == "__main__":
             else:
                 expected_uid = row[4]
                 built_message = f'{row[2] + " " if row[2] else ""}{row[3]}'
-                print(f'[~] SENDING MESSAGE TO {expected_uid} [~] {built_message}')
+                print(f'[~] {row[0]} SENDING MESSAGE TO {expected_uid} [~] {built_message}')
                 conn = OPEN_CONNECTIONS.get(row[4])
 
                 # Keep trying to send the message until max attempts reached, this gives us a max try of 100 per message
