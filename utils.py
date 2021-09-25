@@ -1,9 +1,10 @@
-import struct
-from typing import List, Tuple
-from Crypto.Cipher import AES
-from io import BytesIO
-from Crypto.PublicKey import RSA
 import socket
+import struct
+from typing import Tuple
+
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
+
 
 class Signal:
     READY = b'~READY~'
@@ -19,7 +20,7 @@ class Connection:
         self.address: str = ''
         self.port: int = -1
         self.uid: str = uid
-        self.encryption_key: AES = None
+        self.session_key: bytes = b''
 
     def send(self, raw_data: bytes, flags: int = 0) -> int:
         return self.socket.send(raw_data, flags)
@@ -35,8 +36,6 @@ class Connection:
 
 
 BLOCK_SIZE = 16
-pad = lambda s: s + (BLOCK_SIZE - len(s) % BLOCK_SIZE) * chr(BLOCK_SIZE - len(s) % BLOCK_SIZE)
-unpad = lambda s: s[:-ord(s[len(s) - 1:])]
 
 
 # Transmission Overview
@@ -56,8 +55,8 @@ def build_data_frame(encrypted_message: bytes) -> Tuple[bytes, bytes]:
     return length_in_bytes, encrypted_message
 
 
-def decrypt_data_to_message(raw_data: bytes, encryption_key: AES) -> str:
-    decrypted_message_data = decrypt_message(raw_data, encryption_key)
+def decrypt_data_to_message(raw_data: bytes, session_key: bytes) -> str:
+    decrypted_message_data = decrypt_message(raw_data, session_key)
     return str(decrypted_message_data, 'utf-8')
 
 
@@ -66,10 +65,11 @@ def encrypt_data_to_data_frame(raw_data: bytes, encryption_key: AES) -> Tuple[by
     return build_data_frame(encrypted_message)
 
 
-# TODO: fill out these utility functions for decrypting/encrypting data
-def encrypt_message(raw_message: bytes, encryption_key: AES) -> bytes:
-    return raw_message
+def encrypt_message(raw_message: bytes, session_key: bytes) -> bytes:
+    encryption_key = AES.new(session_key, AES.MODE_CBC, session_key[8:] + session_key[:8])
+    return encryption_key.encrypt(pad(raw_message, BLOCK_SIZE))
 
 
-def decrypt_message(encrypted_data: bytes, encryption_key: AES) -> bytes:
-    return encrypted_data
+def decrypt_message(encrypted_data: bytes, session_key: bytes) -> bytes:
+    encryption_key = AES.new(session_key, AES.MODE_CBC, session_key[8:] + session_key[:8])
+    return unpad(encryption_key.decrypt(encrypted_data), BLOCK_SIZE)
