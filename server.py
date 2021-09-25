@@ -23,7 +23,7 @@ def get_ip_address():
 
 
 def handle_handshake(connection: Connection, s_8_bytes: bytes, rsa_public: RSA, rsa_private: RSA) -> bool:
-    length = struct.unpack('>I', connection.receive(4))[0]
+    length = int.from_bytes(connection.receive(4), byteorder='big')
     received_bytes = connection.receive(length)
     client_key = received_bytes[:-20]
     client_sha1 = received_bytes[-20:]
@@ -37,16 +37,19 @@ def handle_handshake(connection: Connection, s_8_bytes: bytes, rsa_public: RSA, 
     cipher_rsa = PKCS1_OAEP.new(client_rsa)
     encrypted = cipher_rsa.encrypt(s_8_bytes)
 
-    length, message = build_data_frame(rsa_public + server_sha1 + encrypted)
+    length, message = build_data_frame(rsa_public + server_sha1)
     connection.send(length)
     connection.send(message)
 
-    encrypted = connection.receive(8)
-    cipher_rsa = PKCS1_OAEP.new(rsa_private)
-    c_8_bytes = cipher_rsa.decrypt(encrypted)
+    length, message = build_data_frame(encrypted)
+    connection.send(length)
+    connection.send(message)
 
-    print(f"[!] Server bytes after handshake: {s_8_bytes}")
-    print(f"[!] Client bytes after handshake: {c_8_bytes}")
+    length = int.from_bytes(connection.receive(4), byteorder='big')
+    encrypted = connection.receive(length)
+    private_rsa_key = RSA.importKey(rsa_private)
+    cipher_rsa = PKCS1_OAEP.new(private_rsa_key)
+    c_8_bytes = cipher_rsa.decrypt(encrypted)
 
     connection.encryption_key = AES.new(s_8_bytes + c_8_bytes, AES.MODE_CBC, c_8_bytes + s_8_bytes)
     return True
@@ -65,18 +68,6 @@ def connection_setup(client_list: List[str], connection_lock: Lock):
             uid_length = struct.unpack('>Q', client.receive(8))[0]
             recieved_uid = client.receive(uid_length)
             client.uid = str(recieved_uid, 'utf-8')
-
-            # generate new RSA keys
-            key = RSA.generate(2048)
-            private_key = key.export_key()
-            file_out = open("server_private.pem", "wb")
-            file_out.write(private_key)
-            file_out.close()
-
-            public_key = key.publickey().export_key()
-            file_out = open("server_public.pem", "wb")
-            file_out.write(public_key)
-            file_out.close()
 
             # If the client uid is not valid then close the connection
             # if client.uid not in client_list:
@@ -153,6 +144,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     c_list = []
+
+    # generate new RSA keys
+    key = RSA.generate(2048)
+    private_key = key.export_key()
+    public_key = key.publickey().export_key()
 
     # if not os.path.isfile(args.messages):
     #     print(f'[!] {args.messages} is not a file')
