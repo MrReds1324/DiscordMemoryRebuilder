@@ -1,18 +1,20 @@
+import argparse
 import os
-import sys
-import time
+import random
 import socket
 import struct
-import argparse
-import random
+import sys
+import time
 from threading import Thread
-from utils import build_data_frame
-from Crypto.Cipher import AES, PKCS1_OAEP
+
+from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Hash import SHA1
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
-from utils import Connection, Signal, decrypt_message, encrypt_data_to_data_frame
 from pyautogui import write, press
+
+from utils import Connection, Signal, decrypt_message, encrypt_data_to_data_frame
+from utils import build_data_frame
 
 
 def connect_to_server(connection: Connection, max_attempts: int = 5) -> bool:
@@ -44,7 +46,6 @@ def initiate_handshake(connection: Connection, c_8_bytes: bytes, rsa_public: RSA
         server_sha1 = received_bytes[-20:]
 
         length = struct.unpack('>I', connection.receive(4))[0]
-        # length = int.from_bytes(connection.receive(4), byteorder='big')
         encrypted_bytes = connection.receive(length)
 
         if client_sha1 != server_sha1:
@@ -61,7 +62,7 @@ def initiate_handshake(connection: Connection, c_8_bytes: bytes, rsa_public: RSA
         connection.send(struct.pack('>I', len(encrypted)))
         connection.send(encrypted)
 
-        connection.encryption_key = AES.new(s_8_bytes + c_8_bytes, AES.MODE_CBC, c_8_bytes + s_8_bytes)
+        connection.session_key = s_8_bytes + c_8_bytes
         return True
     except ConnectionResetError:
         return False
@@ -82,7 +83,7 @@ def receive_data_frames(connection: Connection) -> None:
             message_len = struct.unpack('>I', message_len_bytes)[0]
             message_bytes = connection.receive(message_len)
 
-            decrypted_message_bytes = decrypt_message(message_bytes, connection.encryption_key)
+            decrypted_message_bytes = decrypt_message(message_bytes, connection.session_key)
 
             # If the decrypted message is the terminate signal, stop the client
             if decrypted_message_bytes == Signal.TERMINATE:
@@ -97,7 +98,7 @@ def receive_data_frames(connection: Connection) -> None:
             press('enter')
             time.sleep(random.uniform(0, 1))
 
-            data_length, encrypted_message = encrypt_data_to_data_frame(Signal.AWAIT, connection.encryption_key)
+            data_length, encrypted_message = encrypt_data_to_data_frame(Signal.AWAIT, connection.session_key)
             connection.send(data_length)
             connection.send(encrypted_message)
         except ConnectionResetError:  # Handle connection reset, and attempt to reestablish connection to the server
@@ -119,7 +120,7 @@ def receive_data_frames(connection: Connection) -> None:
 
         except Exception as e:
             print(f'[!] Something went wrong when receiving the data frame: {e}')
-            data_length, encrypted_message = encrypt_data_to_data_frame(Signal.RESEND, connection.encryption_key)
+            data_length, encrypted_message = encrypt_data_to_data_frame(Signal.RESEND, connection.session_key)
             connection.send(data_length)
             connection.send(encrypted_message)
 
@@ -137,7 +138,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     client_8_bytes = get_random_bytes(8)
-    print(f"[!] Client bytes before handshake: {client_8_bytes}")
 
     server = Connection(args.unique_id)
     server.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

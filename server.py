@@ -1,17 +1,19 @@
-import socket
+import argparse
 import csv
+import json
 import os
+import socket
 import struct
 import sys
 import time
-import json
-import argparse
-from Crypto.Cipher import AES, PKCS1_OAEP
+from threading import Thread, Lock
+from typing import List
+
+from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Hash import SHA1
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
-from threading import Thread, Lock
-from typing import List
+
 from utils import Connection, Signal, encrypt_data_to_data_frame, decrypt_message, build_data_frame
 
 MAX_RETRIES = 10
@@ -52,7 +54,7 @@ def handle_handshake(connection: Connection, s_8_bytes: bytes, rsa_public: RSA, 
         cipher_rsa = PKCS1_OAEP.new(private_rsa_key)
         c_8_bytes = cipher_rsa.decrypt(encrypted)
 
-        connection.encryption_key = AES.new(s_8_bytes + c_8_bytes, AES.MODE_CBC, c_8_bytes + s_8_bytes)
+        connection.session_key = s_8_bytes + c_8_bytes
         return True
     except ConnectionResetError:
         return False
@@ -112,7 +114,7 @@ def send_data_frame(connection: Connection, message: str, connection_lock: Lock,
 
     try:
         # Encrypt the message and send it to the server
-        message_length, encrypted_message = encrypt_data_to_data_frame(bytes(message, 'utf-8'), connection.encryption_key)
+        message_length, encrypted_message = encrypt_data_to_data_frame(bytes(message, 'utf-8'), connection.session_key)
         connection.send(message_length)
         connection.send(encrypted_message)
 
@@ -122,7 +124,7 @@ def send_data_frame(connection: Connection, message: str, connection_lock: Lock,
             message_len = struct.unpack('>I', message_len_bytes)[0]
             message_bytes = connection.receive(message_len)
 
-            decrypted_message_bytes = decrypt_message(message_bytes, connection.encryption_key)
+            decrypted_message_bytes = decrypt_message(message_bytes, connection.session_key)
 
             # If the decrypted message is the AWAIT signal return True, otherwise attempt to resend the message 10 times
             if decrypted_message_bytes == Signal.AWAIT:
